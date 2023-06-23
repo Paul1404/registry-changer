@@ -1,3 +1,17 @@
+function CustomWrite-Output {
+    param (
+        [Parameter(ValueFromPipeline=$true)]
+        [string]$Message
+    )
+    
+    begin {}
+    process {
+        Write-Output $Message
+        Write-Output ""
+    }
+    end {}
+}
+
 function Show-SettingsFileDialog {
     $dialog = New-Object System.Windows.Forms.OpenFileDialog
     $dialog.InitialDirectory = $scriptRoot
@@ -42,16 +56,16 @@ function Update-UserProfiles($parameters) {
             $userRegPath = "Registry::HKEY_USERS\$($user.PSChildName)\$($parameters.RegPath)"
 
             if (Get-ItemProperty -Path $userRegPath -Name $parameters.ValueName -ErrorAction SilentlyContinue) {
-                Write-Output "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
+                CustomWrite-Output "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
                 return
             }
 
             if (!(Test-Path $userRegPath)) {
-                Write-Output "Creating a new registry key for user $($user.PSChildName)..."
+                CustomWrite-Output "Creating a new registry key for user $($user.PSChildName)..."
                 New-Item -Path $userRegPath -Force | Out-Null
             }
 
-            Write-Output "Setting the registry value for user $($user.PSChildName)..."
+            CustomWrite-Output "Setting the registry value for user $($user.PSChildName)..."
             Set-ItemProperty -Path $userRegPath -Name $parameters.ValueName -Value $parameters.ValueData -Type DWord
         } catch {
             Write-Error "Error encountered while processing user $($user.PSChildName): $_"
@@ -59,26 +73,65 @@ function Update-UserProfiles($parameters) {
     }
 }
 
+function Ask-To-Proceed {
+    $prompt = Read-Host "Do you want to proceed with these settings? (Y/N)"
+    if ($prompt -eq 'Y') {
+        $true
+    } else {
+        $false
+    }
+}
+
+function Ask-To-Backup {
+    $prompt = Read-Host "Do you want to backup the registry? (Y/N)"
+    if ($prompt -eq 'Y') {
+        $true
+    } else {
+        $false
+    }
+}
+
+function Backup-Registry {
+    $backupDir = Join-Path -Path $scriptRoot -ChildPath 'Backup'
+    if (!(Test-Path $backupDir)) {
+        New-Item -ItemType Directory -Path $backupDir | Out-Null
+    }
+    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $backupFilePath = Join-Path -Path $backupDir -ChildPath "RegistryBackup_$timestamp.reg"
+
+    CustomWrite-Output "Starting backup..."
+    
+    # Start the backup operation in a separate process and wait for it to finish
+    Start-Process -FilePath "regedit.exe" -ArgumentList "/E", "`"$backupFilePath`"" -NoNewWindow -Wait
+
+    CustomWrite-Output "Backup complete."
+}
+
+
+
 Add-Type -AssemblyName System.Windows.Forms
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$savedParametersFile = Join-Path -Path $scriptRoot -ChildPath 'SavedParameters.xml'
-
-if (Test-Path $savedParametersFile) {
-    $savedParameters = Import-Clixml -Path $savedParametersFile
-    Write-Output 'Current saved parameters:'
-    $savedParameters | Format-Table -AutoSize
-} else {
-    $savedParameters = Show-SettingsFileDialog
-}
+$savedParameters = Show-SettingsFileDialog
 
 if ($null -eq $savedParameters) {
     $savedParameters = Read-NewParameters
     New-SettingsFile -parameters $savedParameters
-    Write-Output "Parameters saved to file: $settingsFilePath"
+    CustomWrite-Output "Parameters saved to file: $settingsFilePath"
 }
 
-Update-UserProfiles -parameters $savedParameters
+CustomWrite-Output 'Current saved parameters:'
+$savedParameters | Format-Table -AutoSize
 
-Write-Output "Script execution complete."
+if (Ask-To-Proceed) {
+    if (Ask-To-Backup) {
+        Backup-Registry
+        CustomWrite-Output "Registry has been backed up."
+    }
+    Update-UserProfiles -parameters $savedParameters
+    CustomWrite-Output "Script execution complete."
+} else {
+    CustomWrite-Output "Script execution cancelled by user."
+}
+
 Read-Host "Press Enter to exit"

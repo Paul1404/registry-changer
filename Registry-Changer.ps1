@@ -1,18 +1,23 @@
-function CustomWrite-Output {
+function Write-CustomOutput {
     param (
         [Parameter(ValueFromPipeline=$true)]
+        [string]$Message,
+        [string]$Color = "White"
+    )
+    
+    Write-Host $Message -ForegroundColor $Color
+    Write-Host ""
+}
+
+function Write-CustomError {
+    param (
         [string]$Message
     )
     
-    begin {}
-    process {
-        Write-Output $Message
-        Write-Output ""
-    }
-    end {}
+    Write-Host $Message -ForegroundColor Red
 }
 
-function Show-SettingsFileDialog {
+function Get-SettingsFileDialog {
     $dialog = New-Object System.Windows.Forms.OpenFileDialog
     $dialog.InitialDirectory = $scriptRoot
     $dialog.Filter = "XML files (*.xml)|*.xml"
@@ -26,7 +31,7 @@ function Show-SettingsFileDialog {
     }
 }
 
-function Read-NewParameters {
+function Get-NewParameters {
     $regPath = Read-Host -Prompt 'Enter the registry path'
     $valueName = Read-Host -Prompt 'Enter the value name'
     $valueData = Read-Host -Prompt 'Enter the value data'
@@ -56,24 +61,24 @@ function Update-UserProfiles($parameters) {
             $userRegPath = "Registry::HKEY_USERS\$($user.PSChildName)\$($parameters.RegPath)"
 
             if (Get-ItemProperty -Path $userRegPath -Name $parameters.ValueName -ErrorAction SilentlyContinue) {
-                CustomWrite-Output "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
+                Write-CustomOutput "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
                 return
             }
 
             if (!(Test-Path $userRegPath)) {
-                CustomWrite-Output "Creating a new registry key for user $($user.PSChildName)..."
+                Write-CustomOutput "Creating a new registry key for user $($user.PSChildName)..."
                 New-Item -Path $userRegPath -Force | Out-Null
             }
 
-            CustomWrite-Output "Setting the registry value for user $($user.PSChildName)..."
+            Write-CustomOutput "Setting the registry value for user $($user.PSChildName)..."
             Set-ItemProperty -Path $userRegPath -Name $parameters.ValueName -Value $parameters.ValueData -Type DWord
         } catch {
-            Write-Error "Error encountered while processing user $($user.PSChildName): $_"
+            Write-CustomError "Error encountered while processing user $($user.PSChildName): $_"
         }
     }
 }
 
-function Ask-To-Proceed {
+function Confirm-Proceed {
     $prompt = Read-Host "Do you want to proceed with these settings? (Y/N)"
     if ($prompt -eq 'Y') {
         $true
@@ -82,7 +87,7 @@ function Ask-To-Proceed {
     }
 }
 
-function Ask-To-Backup {
+function Confirm-Backup {
     $prompt = Read-Host "Do you want to backup the registry? (Y/N)"
     if ($prompt -eq 'Y') {
         $true
@@ -99,12 +104,12 @@ function Backup-Registry {
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
     $backupFilePath = Join-Path -Path $backupDir -ChildPath "RegistryBackup_$timestamp.reg"
 
-    CustomWrite-Output "Starting backup..."
+    Write-CustomOutput "Starting backup..."
     
     # Start the backup operation in a separate process and wait for it to finish
     Start-Process -FilePath "regedit.exe" -ArgumentList "/E", "`"$backupFilePath`"" -NoNewWindow -Wait
 
-    CustomWrite-Output "Backup complete."
+    Write-CustomOutput "Backup complete."
 }
 
 
@@ -112,26 +117,26 @@ function Backup-Registry {
 Add-Type -AssemblyName System.Windows.Forms
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$savedParameters = Show-SettingsFileDialog
+$savedParameters = Get-SettingsFileDialog
 
 if ($null -eq $savedParameters) {
-    $savedParameters = Read-NewParameters
+    $savedParameters = Get-NewParameters
     New-SettingsFile -parameters $savedParameters
-    CustomWrite-Output "Parameters saved to file: $settingsFilePath"
+    Write-CustomOutput "Parameters saved to file: $settingsFilePath"
 }
 
-CustomWrite-Output 'Current saved parameters:'
+Write-CustomOutput 'Current saved parameters:'
 $savedParameters | Format-Table -AutoSize
 
-if (Ask-To-Proceed) {
-    if (Ask-To-Backup) {
+if (Confirm-Proceed) {
+    if (Confirm-Backup) {
         Backup-Registry
-        CustomWrite-Output "Registry has been backed up."
+        Write-CustomOutput "Registry has been backed up."
     }
     Update-UserProfiles -parameters $savedParameters
-    CustomWrite-Output "Script execution complete."
+    Write-CustomOutput "Script execution complete."
 } else {
-    CustomWrite-Output "Script execution cancelled by user."
+    Write-CustomOutput "Script execution cancelled by user."
 }
 
 Read-Host "Press Enter to exit"

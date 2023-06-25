@@ -141,8 +141,22 @@ function Get-SettingsFileDialog {
 # Function to read new parameters from the user
 function Get-NewParameters {
     $regPath = Read-Host -Prompt 'Enter the registry path'
+    if ($regPath -notmatch '^(HKLM:|HKCU:|HKCR:|HKU:|HKCC:|HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER|HKEY_CLASSES_ROOT|HKEY_USERS|HKEY_CURRENT_CONFIG)\\') {
+        Write-CustomError "The registry path is not valid. It should start with a valid hive (like 'HKLM:' or 'HKEY_LOCAL_MACHINE')."
+        exit 1
+    }
+
     $valueName = Read-Host -Prompt 'Enter the value name'
+    if ([string]::IsNullOrEmpty($valueName)) {
+        Write-CustomError "The value name cannot be empty."
+        exit 1
+    }
+
     $valueData = Read-Host -Prompt 'Enter the value data'
+    if ([string]::IsNullOrEmpty($valueData)) {
+        Write-CustomError "The value data cannot be empty."
+        exit 1
+    }
 
     [PSCustomObject]@{
         RegPath = $regPath
@@ -150,6 +164,7 @@ function Get-NewParameters {
         ValueData = $valueData
     }
 }
+
 
 # Function to create a new settings file
 function New-SettingsFile {

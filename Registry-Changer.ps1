@@ -1,10 +1,47 @@
 <#
 .SYNOPSIS
 This script allows to manipulate registry settings of all users profiles on the computer.
+
 .DESCRIPTION
 The script provides options to import settings from an XML file or enter them manually. 
-It also provides options to create a backup before applying the changes.
+It also provides options to create a backup before applying the changes. 
+
+.EXAMPLE
+# To run the script and select an XML settings file:
+.\Registry-Changer.ps1
+
+# The script will prompt you to select an XML settings file and ask if you want to backup the registry.
+# If you choose to proceed, it will update the registry settings for all user profiles according to the selected file.
+# It will also create a unique log file for each run under a 'Log' subdirectory in the script's directory, storing the output messages and errors.
+
+.PARAMETER N/A
+This script doesn't accept any parameters. All inputs are interactive.
+
+.NOTES
+General notes:
+- Please run the script with administrative privileges to ensure it can access and modify the registry.
+- Always confirm that you have a recent backup of your registry before running the script, in case any issues arise.
+- This script was last updated on 2023-06-25.
+
+.LINK
+https://github.com/Paul1404/registry-changer
 #>
+
+
+# Global variable to hold the log file path
+$logFilePath = ""
+
+# Function to create a new log file for each run
+function New-LogFile {
+    $logDir = Join-Path -Path $scriptRoot -ChildPath 'Log'
+    
+    if (!(Test-Path $logDir)) {
+        New-Item -ItemType Directory -Path $logDir | Out-Null
+    }
+    
+    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $script:logFilePath = Join-Path -Path $logDir -ChildPath "Log_$timestamp.txt"
+}
 
 # Custom functions to write output and errors
 function Write-CustomOutput {
@@ -15,8 +52,12 @@ function Write-CustomOutput {
         [string]$Color = "White"
     )
     
+    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $logMessage = "$timestamp - $Message"
+    
     Write-Host $Message -ForegroundColor $Color
     Write-Host ""
+    Add-Content -Path $script:logFilePath -Value $logMessage
 }
 
 function Write-CustomError {
@@ -27,8 +68,15 @@ function Write-CustomError {
         [string]$Color = "Red"
     )
     
+    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $errorMessage = "$timestamp - ERROR: $Message"
+    
     Write-Host $Message -ForegroundColor $Color
+    Add-Content -Path $script:logFilePath -Value $errorMessage
 }
+
+
+
 
 # Function to select a settings XML file
 function Get-SettingsFileDialog {
@@ -145,10 +193,14 @@ function Backup-Registry {
 }
 
 # Main script
+
 Add-Type -AssemblyName System.Windows.Forms
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $savedParameters = Get-SettingsFileDialog
+
+# Call the New-LogFile function at the start of the script
+New-LogFile
 
 if ($null -eq $savedParameters) {
     $savedParameters = Get-NewParameters

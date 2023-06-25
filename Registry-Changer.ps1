@@ -49,11 +49,12 @@ function Write-CustomOutput {
     param (
         [Parameter(ValueFromPipeline=$true)]
         [string]$Message,
-        [string]$Color = "White"
+        [string]$Color = "White",
+        [string]$Level = "INFO" # Add log level parameter
     )
     
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-    $logMessage = "$timestamp - $Message"
+    $logMessage = "$timestamp - $Level - $Message" # Include log level in log message
     
     Write-Host $Message -ForegroundColor $Color
     Write-Host ""
@@ -65,15 +66,37 @@ function Write-CustomError {
     param (
         [Parameter(ValueFromPipeline=$true)]
         [string]$Message,
-        [string]$Color = "Red"
+        [string]$Color = "Red",
+        [string]$Level = "ERROR" # Add log level parameter
     )
     
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-    $errorMessage = "$timestamp - ERROR: $Message"
-    
+    $errorMessage = "$timestamp - $Level - $Message" # Include log level in log message
+
+    # Add script line where the error occurred
+    $line = $_.InvocationInfo.ScriptLineNumber
+    $errorMessage += "`nError occurred on line: $line"
+
     Write-Host $Message -ForegroundColor $Color
     Add-Content -Path $script:logFilePath -Value $errorMessage
 }
+
+# A function to manage old log files
+function Manage-OldLogs {
+    [CmdletBinding()]
+    param (
+        [string]$LogDirectory = (Join-Path -Path $scriptRoot -ChildPath 'Log'),
+        [int]$MaxLogCount = 100 # You can adjust this as needed
+    )
+    
+    $oldLogs = Get-ChildItem -Path $LogDirectory -Filter 'Log_*.txt' | Sort-Object -Property LastWriteTime
+    
+    if ($oldLogs.Count -gt $MaxLogCount) {
+        $logsToDelete = $oldLogs.Count - $MaxLogCount
+        $oldLogs | Select-Object -First $logsToDelete | Remove-Item -Force
+    }
+}
+
 
 
 
@@ -201,6 +224,7 @@ $savedParameters = Get-SettingsFileDialog
 
 # Call the New-LogFile function at the start of the script
 New-LogFile
+Manage-OldLogs
 
 if ($null -eq $savedParameters) {
     $savedParameters = Get-NewParameters

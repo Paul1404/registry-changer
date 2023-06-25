@@ -156,10 +156,14 @@ function Update-UserProfiles {
         $parameters
     )
 
+    Write-CustomOutput "Starting to update user profiles..." # Log start of function
+
     Get-ChildItem "Registry::HKEY_USERS" | Where-Object { $_.PSChildName -match "S-1-5-21" } | ForEach-Object {
         $user = $_
         try {
             $userRegPath = "Registry::HKEY_USERS\$($user.PSChildName)\$($parameters.RegPath)"
+
+            Write-CustomOutput "Processing user $($user.PSChildName)..." # Log start of user processing
 
             if (Get-ItemProperty -Path $userRegPath -Name $parameters.ValueName -ErrorAction SilentlyContinue) {
                 Write-CustomOutput "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
@@ -173,11 +177,13 @@ function Update-UserProfiles {
 
             Write-CustomOutput "Setting the registry value for user $($user.PSChildName)..."
             Set-ItemProperty -Path $userRegPath -Name $parameters.ValueName -Value $parameters.ValueData -Type DWord
+            Write-CustomOutput "Successfully set the registry value for user $($user.PSChildName)." # Log success of operation
         } catch {
             Write-CustomError "Error encountered while processing user $($user.PSChildName): $_"
         }
     }
 }
+
 
 # Function to confirm user action
 function Confirm-Action {

@@ -61,7 +61,7 @@ function New-LogFile {
         if (!(Test-Path $logDir)) {
             New-Item -ItemType Directory -Path $logDir | Out-Null
         }
-        
+        Write-CustomOutput "Creating New Log File at $logDir"
         $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
         $script:logFilePath = Join-Path -Path $logDir -ChildPath "Log_$timestamp.txt"
     } catch {

@@ -55,15 +55,20 @@ function Get-Environment {
 
 # Function to create a new log file for each run
 function New-LogFile {
-    $logDir = Join-Path -Path $scriptRoot -ChildPath 'Log'
-    
-    if (!(Test-Path $logDir)) {
-        New-Item -ItemType Directory -Path $logDir | Out-Null
+    try {
+        $logDir = Join-Path -Path $scriptRoot -ChildPath 'Log'
+        
+        if (!(Test-Path $logDir)) {
+            New-Item -ItemType Directory -Path $logDir | Out-Null
+        }
+        
+        $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+        $script:logFilePath = Join-Path -Path $logDir -ChildPath "Log_$timestamp.txt"
+    } catch {
+        Write-CustomError "Error occurred while creating new log file: $_"
     }
-    
-    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-    $script:logFilePath = Join-Path -Path $logDir -ChildPath "Log_$timestamp.txt"
 }
+
 
 # Custom functions to write output and errors
 function Write-CustomOutput {
@@ -110,33 +115,39 @@ function Clear-OldLogs {
         [string]$LogDirectory = (Join-Path -Path $scriptRoot -ChildPath 'Log'),
         [int]$MaxLogCount = 100 # You can adjust this as needed
     )
-    
-    $oldLogs = Get-ChildItem -Path $LogDirectory -Filter 'Log_*.txt' | Sort-Object -Property LastWriteTime
-    
-    if ($oldLogs.Count -gt $MaxLogCount) {
-        $logsToDelete = $oldLogs.Count - $MaxLogCount
-        $oldLogs | Select-Object -First $logsToDelete | Remove-Item -Force
+
+    try {
+        $oldLogs = Get-ChildItem -Path $LogDirectory -Filter 'Log_*.txt' | Sort-Object -Property LastWriteTime
+        
+        if ($oldLogs.Count -gt $MaxLogCount) {
+            $logsToDelete = $oldLogs.Count - $MaxLogCount
+            $oldLogs | Select-Object -First $logsToDelete | Remove-Item -Force
+        }
+    } catch {
+        Write-Host "Error occurred while clearing old log files: $_"
     }
 }
-
-
-
 
 
 # Function to select a settings XML file
 function Get-SettingsFileDialog {
-    $dialog = New-Object System.Windows.Forms.OpenFileDialog
-    $dialog.InitialDirectory = $scriptRoot
-    $dialog.Filter = "XML files (*.xml)|*.xml"
-    $dialog.Title = "Select a settings XML file"
-
-    if ($dialog.ShowDialog() -eq 'OK') {
-        $selectedFilePath = $dialog.FileName
-        Import-Clixml -Path $selectedFilePath
-    } else {
-        $null
+    try {
+        $dialog = New-Object System.Windows.Forms.OpenFileDialog
+        $dialog.InitialDirectory = $scriptRoot
+        $dialog.Filter = "XML files (*.xml)|*.xml"
+        $dialog.Title = "Select a settings XML file"
+    
+        if ($dialog.ShowDialog() -eq 'OK') {
+            $selectedFilePath = $dialog.FileName
+            Import-Clixml -Path $selectedFilePath
+        } else {
+            $null
+        }
+    } catch {
+        Write-CustomError "Error occurred while selecting the settings XML file: $_"
     }
 }
+
 
 # Function to read new parameters from the user
 function Get-NewParameters {
@@ -174,16 +185,21 @@ function New-SettingsFile {
         $parameters
     )
 
-    $settingsFiles = Get-ChildItem -Path $scriptRoot -Filter 'Settings*.xml' | Select-Object -ExpandProperty BaseName
-    $maxNumber = ($settingsFiles | ForEach-Object { ($_ -replace '[^0-9]', '') -as [int] } | Sort-Object -Descending)[0]
-
-    $nextNumber = $maxNumber + 1
-    $settingsFileName = "Settings_$nextNumber.xml"
-    $settingsFilePath = Join-Path -Path $scriptRoot -ChildPath $settingsFileName
-
-    $parameters | Export-Clixml -Path $settingsFilePath
-    return $settingsFilePath
+    try {
+        $settingsFiles = Get-ChildItem -Path $scriptRoot -Filter 'Settings*.xml' | Select-Object -ExpandProperty BaseName
+        $maxNumber = ($settingsFiles | ForEach-Object { ($_ -replace '[^\d]', '') -as [int] } | Sort-Object -Descending | Select-Object -First 1) + 1
+        $newSettingsFileName = "Settings$maxNumber.xml"
+        $newSettingsFilePath = Join-Path -Path $scriptRoot -ChildPath $newSettingsFileName
+    
+        $parameters | Export-Clixml -Path $newSettingsFilePath
+    
+        return $newSettingsFilePath
+    } catch {
+        Write-Host "Error occurred while creating new settings file: $_"
+    }
 }
+
+
 
 # Function to update user profiles
 function Update-UserProfiles {
@@ -244,19 +260,26 @@ function Backup-Registry {
     param (
         [string]$BackupDirectory = (Join-Path -Path $scriptRoot -ChildPath 'Backup')
     )
-
-    if (!(Test-Path $BackupDirectory)) {
-        New-Item -ItemType Directory -Path $BackupDirectory | Out-Null
-    }
-    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-    $backupFilePath = Join-Path -Path $BackupDirectory -ChildPath "RegistryBackup_$timestamp.reg"
-
-    Write-CustomOutput "Starting backup..."
-    Start-Process -FilePath "regedit.exe" -ArgumentList "/E", "`"$backupFilePath`"" -NoNewWindow -Wait
-    Write-CustomOutput "Backup complete."
     
-    return $backupFilePath
+    try {
+        if (!(Test-Path $BackupDirectory)) {
+            New-Item -ItemType Directory -Path $BackupDirectory | Out-Null
+        }
+        $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+        $backupFilePath = Join-Path -Path $BackupDirectory -ChildPath "RegistryBackup_$timestamp.reg"
+    
+        Write-Host "Starting backup..."
+        Start-Process -FilePath "regedit.exe" -ArgumentList "/E", "`"$backupFilePath`"" -NoNewWindow -Wait
+        Write-Host "Backup complete."
+        
+        return $backupFilePath
+    } catch {
+        Write-Host "Error occurred while backing up the registry: $_"
+    }
 }
+
+
+
 
 # Main script
 

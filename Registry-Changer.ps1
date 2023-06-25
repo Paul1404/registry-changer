@@ -31,7 +31,7 @@ https://github.com/Paul1404/registry-changer
 # Global variable to hold the log file path
 $logFilePath = ""
 
-function Check-Environment {
+function Get-Environment {
     # Check PowerShell version
     if ($PSVersionTable.PSVersion.Major -lt 5 -or ($PSVersionTable.PSVersion.Major -eq 5 -and $PSVersionTable.PSVersion.Minor -lt 1)) {
         Write-CustomError "This script requires PowerShell version 5.1 or higher. Your version is $($PSVersionTable.PSVersion)."
@@ -104,7 +104,7 @@ function Write-CustomError {
 }
 
 # A function to manage old log files
-function Manage-OldLogs {
+function Clear-OldLogs {
     [CmdletBinding()]
     param (
         [string]$LogDirectory = (Join-Path -Path $scriptRoot -ChildPath 'Log'),
@@ -267,9 +267,9 @@ $savedParameters = Get-SettingsFileDialog
 
 # Call the New-LogFile function at the start of the script
 New-LogFile
-Manage-OldLogs
+Clear-OldLogs
 
-Check-Environment
+Get-Environment
 
 if ($null -eq $savedParameters) {
     $savedParameters = Get-NewParameters

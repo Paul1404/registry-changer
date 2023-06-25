@@ -115,18 +115,18 @@ function Clear-OldLogs {
         [string]$LogDirectory = (Join-Path -Path $scriptRoot -ChildPath 'Log'),
         [int]$MaxLogCount = 100 # You can adjust this as needed
     )
-
-    try {
-        $oldLogs = Get-ChildItem -Path $LogDirectory -Filter 'Log_*.txt' | Sort-Object -Property LastWriteTime
-        
-        if ($oldLogs.Count -gt $MaxLogCount) {
-            $logsToDelete = $oldLogs.Count - $MaxLogCount
-            $oldLogs | Select-Object -First $logsToDelete | Remove-Item -Force
+    
+    $oldLogs = Get-ChildItem -Path $LogDirectory -Filter 'Log_*.txt' | Sort-Object -Property LastWriteTime
+    
+    if ($oldLogs.Count -gt $MaxLogCount) {
+        $logsToDelete = $oldLogs.Count - $MaxLogCount
+        $oldLogs | Select-Object -First $logsToDelete | ForEach-Object {
+            Write-CustomOutput "Deleting old log file: $($_.FullName)"
+            Remove-Item -Path $_.FullName -Force
         }
-    } catch {
-        Write-Host "Error occurred while clearing old log files: $_"
     }
 }
+
 
 
 # Function to select a settings XML file
@@ -200,7 +200,6 @@ function New-SettingsFile {
 }
 
 
-
 # Function to update user profiles
 function Update-UserProfiles {
     [CmdletBinding()]
@@ -218,19 +217,18 @@ function Update-UserProfiles {
 
             Write-CustomOutput "Processing user $($user.PSChildName)..." # Log start of user processing
 
-            if (Get-ItemProperty -Path $userRegPath -Name $parameters.ValueName -ErrorAction SilentlyContinue) {
-                Write-CustomOutput "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
-                return
-            }
+            if (Test-Path -Path $userRegPath) {
+                if (Get-ItemProperty -Path $userRegPath -Name $parameters.ValueName -ErrorAction SilentlyContinue) {
+                    Write-CustomOutput "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
+                    return
+                }
 
-            if (!(Test-Path $userRegPath)) {
-                Write-CustomOutput "Creating a new registry key for user $($user.PSChildName)..."
-                New-Item -Path $userRegPath -Force | Out-Null
+                Write-CustomOutput "Setting the registry value for user $($user.PSChildName)..."
+                Set-ItemProperty -Path $userRegPath -Name $parameters.ValueName -Value $parameters.ValueData -Type DWord
+                Write-CustomOutput "Successfully set the registry value for user $($user.PSChildName)." # Log success of operation
+            } else {
+                Write-CustomOutput "The registry path does not exist for user $($user.PSChildName). Skipping..."
             }
-
-            Write-CustomOutput "Setting the registry value for user $($user.PSChildName)..."
-            Set-ItemProperty -Path $userRegPath -Name $parameters.ValueName -Value $parameters.ValueData -Type DWord
-            Write-CustomOutput "Successfully set the registry value for user $($user.PSChildName)." # Log success of operation
         } catch {
             Write-CustomError "Error encountered while processing user $($user.PSChildName): $_"
         }
@@ -246,13 +244,14 @@ function Confirm-Action {
         [string]$Message
     )
 
-    $prompt = Read-Host -Prompt $Message
+    $prompt = (Read-Host -Prompt $Message).ToUpper()
     if ($prompt -eq 'Y') {
         $true
     } else {
         $false
     }
 }
+
 
 # Function to backup registry
 function Backup-Registry {

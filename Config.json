@@ -1,8 +1,0 @@
-{
-    "LogDirectory": "Log",
-    "MaxLogCount": 100,
-    "BackupDirectory": "Backup",
-    "SettingsFileFilter": "Settings*.xml",
-    "LogFileFilter": "Log_*.txt",
-    "RegistryBackupFilter": "RegistryBackup_*.reg"
-}

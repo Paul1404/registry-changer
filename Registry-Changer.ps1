@@ -30,62 +30,6 @@ https://github.com/Paul1404/registry-changer
 
 # Global variable to hold the log file path
 $logFilePath = ""
-$scriptUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-
-function Get-Configuration {
-    [CmdletBinding()]
-    param (
-        [string]$ConfigFilePath = (Join-Path -Path $scriptRoot -ChildPath 'Config.json')
-    )
-    
-    try {
-        if (Test-Path -Path $ConfigFilePath) {
-            $configJson = Get-Content -Path $ConfigFilePath -Raw
-            $config = $configJson | ConvertFrom-Json -ErrorAction Stop
-        }
-    } catch {
-        Write-CustomError "Error occurred while reading the configuration file: $_"
-    }
-    
-    # Return the configuration, or a default one if it couldn't be loaded
-    return $config -or @{
-        LogDirectory = 'Log'
-        MaxLogCount = 100
-        BackupDirectory = 'Backup'
-        SettingsFileFilter = 'Settings*.xml'
-        LogFileFilter = 'Log_*.txt'
-        RegistryBackupFilter = 'RegistryBackup_*.reg'
-    }
-}
-
-
-
-# Function to write audit log
-function Write-AuditLog {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$true)]
-        [PSCustomObject]$Parameters,
-        [Parameter(Mandatory=$true)]
-        [string]$ScriptUser
-    )
-    
-    try {
-        $machineName = [System.Environment]::MachineName
-        $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-
-        $auditMessage = "`n$timestamp - AUDIT - Script executed by $ScriptUser on $machineName with following parameters:`n"
-        $auditMessage += ($Parameters | Out-String)
-
-        Write-CustomOutput "Writing audit information to log file..."
-        Add-Content -Path $script:logFilePath -Value $auditMessage
-
-        Write-CustomOutput "Audit information written to log file."
-    } catch {
-        Write-CustomError "Error occurred while writing audit information to log file: $_"
-    }
-}
-
 
 function Get-Environment {
     # Check PowerShell version
@@ -112,12 +56,12 @@ function Get-Environment {
 # Function to create a new log file for each run
 function New-LogFile {
     try {
-        $logDir = Join-Path -Path $scriptRoot -ChildPath $config.LogDirectory
+        $logDir = Join-Path -Path $scriptRoot -ChildPath 'Log'
         
         if (!(Test-Path $logDir)) {
             New-Item -ItemType Directory -Path $logDir | Out-Null
         }
-        Write-CustomOutput "Creating New Log File at $logDir"
+        
         $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
         $script:logFilePath = Join-Path -Path $logDir -ChildPath "Log_$timestamp.txt"
     } catch {
@@ -168,10 +112,9 @@ function Write-CustomError {
 function Clear-OldLogs {
     [CmdletBinding()]
     param (
-    [string]$LogDirectory = (Join-Path -Path $scriptRoot -ChildPath $config.LogDirectory),
-    [int]$MaxLogCount = $config.MaxLogCount # You can adjust this as needed
+        [string]$LogDirectory = (Join-Path -Path $scriptRoot -ChildPath 'Log'),
+        [int]$MaxLogCount = 100 # You can adjust this as needed
     )
-
     
     $oldLogs = Get-ChildItem -Path $LogDirectory -Filter 'Log_*.txt' | Sort-Object -Property LastWriteTime
     
@@ -243,7 +186,7 @@ function New-SettingsFile {
     )
 
     try {
-        $settingsFiles = Get-ChildItem -Path $scriptRoot -Filter $config.SettingsFileFilter | Select-Object -ExpandProperty BaseName
+        $settingsFiles = Get-ChildItem -Path $scriptRoot -Filter 'Settings*.xml' | Select-Object -ExpandProperty BaseName
         $maxNumber = ($settingsFiles | ForEach-Object { ($_ -replace '[^\d]', '') -as [int] } | Sort-Object -Descending | Select-Object -First 1) + 1
         $newSettingsFileName = "Settings$maxNumber.xml"
         $newSettingsFilePath = Join-Path -Path $scriptRoot -ChildPath $newSettingsFileName
@@ -269,41 +212,28 @@ function Update-UserProfiles {
 
     Get-ChildItem "Registry::HKEY_USERS" | Where-Object { $_.PSChildName -match "S-1-5-21" } | ForEach-Object {
         $user = $_
-        $attempt = 0
-        $maxAttempts = 3
-        while ($true) {
-            try {
-                $userRegPath = "Registry::HKEY_USERS\$($user.PSChildName)\$($parameters.RegPath)"
+        try {
+            $userRegPath = "Registry::HKEY_USERS\$($user.PSChildName)\$($parameters.RegPath)"
 
-                Write-CustomOutput "Processing user $($user.PSChildName)..." # Log start of user processing
+            Write-CustomOutput "Processing user $($user.PSChildName)..." # Log start of user processing
 
-                if (Test-Path -Path $userRegPath) {
-                    if (Get-ItemProperty -Path $userRegPath -Name $parameters.ValueName -ErrorAction SilentlyContinue) {
-                        Write-CustomOutput "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
-                        return
-                    }
-
-                    Write-CustomOutput "Setting the registry value for user $($user.PSChildName)..."
-                    Set-ItemProperty -Path $userRegPath -Name $parameters.ValueName -Value $parameters.ValueData -Type DWord
-                    Write-CustomOutput "Successfully set the registry value for user $($user.PSChildName)." # Log success of operation
-                } else {
-                    Write-CustomOutput "The registry path does not exist for user $($user.PSChildName). Skipping..."
+            if (Test-Path -Path $userRegPath) {
+                if (Get-ItemProperty -Path $userRegPath -Name $parameters.ValueName -ErrorAction SilentlyContinue) {
+                    Write-CustomOutput "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
+                    return
                 }
-                break
-            } catch {
-                $attempt++
-                if ($attempt -eq $maxAttempts) {
-                    Write-CustomError "Error encountered while processing user $($user.PSChildName) after $maxAttempts attempts: $_"
-                    break
-                } else {
-                    Write-CustomOutput "Error occurred, attempt $attempt of $maxAttempts failed. Retrying..."
-                    Start-Sleep -Seconds (2 * $attempt)
-                }
+
+                Write-CustomOutput "Setting the registry value for user $($user.PSChildName)..."
+                Set-ItemProperty -Path $userRegPath -Name $parameters.ValueName -Value $parameters.ValueData -Type DWord
+                Write-CustomOutput "Successfully set the registry value for user $($user.PSChildName)." # Log success of operation
+            } else {
+                Write-CustomOutput "The registry path does not exist for user $($user.PSChildName). Skipping..."
             }
+        } catch {
+            Write-CustomError "Error encountered while processing user $($user.PSChildName): $_"
         }
     }
 }
-
 
 
 # Function to confirm user action
@@ -327,7 +257,7 @@ function Confirm-Action {
 function Backup-Registry {
     [CmdletBinding()]
     param (
-        [string]$BackupDirectory = (Join-Path -Path $scriptRoot -ChildPath $config.BackupDirectory)
+        [string]$BackupDirectory = (Join-Path -Path $scriptRoot -ChildPath 'Backup')
     )
     
     try {
@@ -339,14 +269,6 @@ function Backup-Registry {
     
         Write-Host "Starting backup..."
         Start-Process -FilePath "regedit.exe" -ArgumentList "/E", "`"$backupFilePath`"" -NoNewWindow -Wait
-
-        # Check if the backup file exists and is not empty
-        if (!(Test-Path $backupFilePath -Type Leaf)) {
-            throw "Backup file not found"
-        } elseif ((Get-Item $backupFilePath).Length -le 0) {
-            throw "Backup file is empty"
-        }
-
         Write-Host "Backup complete."
         
         return $backupFilePath
@@ -357,9 +279,8 @@ function Backup-Registry {
 
 
 
-# Main script
 
-$config = Get-Configuration
+# Main script
 
 Add-Type -AssemblyName System.Windows.Forms
 
@@ -368,7 +289,6 @@ $savedParameters = Get-SettingsFileDialog
 
 # Call the New-LogFile function at the start of the script
 New-LogFile
-Write-AuditLog -Parameters $savedParameters -ScriptUser $scriptUser
 Clear-OldLogs
 
 Get-Environment

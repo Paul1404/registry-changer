@@ -61,13 +61,21 @@ function New-LogFile {
         if (!(Test-Path $logDir)) {
             New-Item -ItemType Directory -Path $logDir | Out-Null
         }
-        
+
         $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
         $script:logFilePath = Join-Path -Path $logDir -ChildPath "Log_$timestamp.txt"
+
+        # Add audit trail information
+        $machineName = $env:COMPUTERNAME
+        $userName = $env:USERNAME
+        $auditMessage = "Log file created on $timestamp by $userName on machine $machineName"
+        Write-CustomOutput $auditMessage
+
     } catch {
         Write-CustomError "Error occurred while creating new log file: $_"
     }
 }
+
 
 
 # Custom functions to write output and errors
@@ -200,40 +208,53 @@ function New-SettingsFile {
 }
 
 
-# Function to update user profiles
+# Function to update user profiles with retry logic
 function Update-UserProfiles {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
-        $parameters
+        $parameters,
+        [int]$maxRetries = 3  # maximum number of retries
     )
 
     Write-CustomOutput "Starting to update user profiles..." # Log start of function
 
     Get-ChildItem "Registry::HKEY_USERS" | Where-Object { $_.PSChildName -match "S-1-5-21" } | ForEach-Object {
         $user = $_
-        try {
-            $userRegPath = "Registry::HKEY_USERS\$($user.PSChildName)\$($parameters.RegPath)"
+        $retryCount = 0
+        
+        while ($retryCount -lt $maxRetries) {
+            try {
+                $userRegPath = "Registry::HKEY_USERS\$($user.PSChildName)\$($parameters.RegPath)"
+                Write-CustomOutput "Processing user $($user.PSChildName)..." # Log start of user processing
 
-            Write-CustomOutput "Processing user $($user.PSChildName)..." # Log start of user processing
+                if (Test-Path -Path $userRegPath) {
+                    if (Get-ItemProperty -Path $userRegPath -Name $parameters.ValueName -ErrorAction SilentlyContinue) {
+                        Write-CustomOutput "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
+                        break
+                    }
 
-            if (Test-Path -Path $userRegPath) {
-                if (Get-ItemProperty -Path $userRegPath -Name $parameters.ValueName -ErrorAction SilentlyContinue) {
-                    Write-CustomOutput "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
-                    return
+                    Write-CustomOutput "Setting the registry value for user $($user.PSChildName)..."
+                    Set-ItemProperty -Path $userRegPath -Name $parameters.ValueName -Value $parameters.ValueData -Type DWord
+                    Write-CustomOutput "Successfully set the registry value for user $($user.PSChildName)." # Log success of operation
+                    break
+                } else {
+                    Write-CustomOutput "The registry path does not exist for user $($user.PSChildName). Skipping..."
+                    break
                 }
-
-                Write-CustomOutput "Setting the registry value for user $($user.PSChildName)..."
-                Set-ItemProperty -Path $userRegPath -Name $parameters.ValueName -Value $parameters.ValueData -Type DWord
-                Write-CustomOutput "Successfully set the registry value for user $($user.PSChildName)." # Log success of operation
-            } else {
-                Write-CustomOutput "The registry path does not exist for user $($user.PSChildName). Skipping..."
+            } catch {
+                Write-CustomError "Error encountered while processing user $($user.PSChildName): $_"
+                $retryCount++
+                Write-CustomOutput "Attempt $($retryCount) failed. Retrying..."
+                if ($retryCount -eq $maxRetries) {
+                    Write-CustomError "Maximum retries reached for user $($user.PSChildName)."
+                }
+                Start-Sleep -Seconds (2*$retryCount)  # wait a bit before next retry, with backoff
             }
-        } catch {
-            Write-CustomError "Error encountered while processing user $($user.PSChildName): $_"
         }
     }
 }
+
 
 
 # Function to confirm user action

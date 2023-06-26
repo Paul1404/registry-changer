@@ -30,6 +30,62 @@ https://github.com/Paul1404/registry-changer
 
 # Global variable to hold the log file path
 $logFilePath = ""
+$scriptUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+
+function Get-Configuration {
+    [CmdletBinding()]
+    param (
+        [string]$ConfigFilePath = (Join-Path -Path $scriptRoot -ChildPath 'Config.json')
+    )
+    
+    try {
+        if (Test-Path -Path $ConfigFilePath) {
+            $configJson = Get-Content -Path $ConfigFilePath -Raw
+            $config = $configJson | ConvertFrom-Json -ErrorAction Stop
+        }
+    } catch {
+        Write-CustomError "Error occurred while reading the configuration file: $_"
+    }
+    
+    # Return the configuration, or a default one if it couldn't be loaded
+    return $config -or @{
+        LogDirectory = 'Log'
+        MaxLogCount = 100
+        BackupDirectory = 'Backup'
+        SettingsFileFilter = 'Settings*.xml'
+        LogFileFilter = 'Log_*.txt'
+        RegistryBackupFilter = 'RegistryBackup_*.reg'
+    }
+}
+
+
+
+# Function to write audit log
+function Write-AuditLog {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [PSCustomObject]$Parameters,
+        [Parameter(Mandatory=$true)]
+        [string]$ScriptUser
+    )
+    
+    try {
+        $machineName = [System.Environment]::MachineName
+        $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+
+        $auditMessage = "`n$timestamp - AUDIT - Script executed by $ScriptUser on $machineName with following parameters:`n"
+        $auditMessage += ($Parameters | Out-String)
+
+        Write-CustomOutput "Writing audit information to log file..."
+        Add-Content -Path $script:logFilePath -Value $auditMessage
+
+        Write-CustomOutput "Audit information written to log file."
+    } catch {
+        Write-CustomError "Error occurred while writing audit information to log file: $_"
+    }
+}
+
 
 function Get-Environment {
     # Check PowerShell version
@@ -56,7 +112,7 @@ function Get-Environment {
 # Function to create a new log file for each run
 function New-LogFile {
     try {
-        $logDir = Join-Path -Path $scriptRoot -ChildPath 'Log'
+        $logDir = Join-Path -Path $scriptRoot -ChildPath $config.LogDirectory
         
         if (!(Test-Path $logDir)) {
             New-Item -ItemType Directory -Path $logDir | Out-Null
@@ -112,9 +168,10 @@ function Write-CustomError {
 function Clear-OldLogs {
     [CmdletBinding()]
     param (
-        [string]$LogDirectory = (Join-Path -Path $scriptRoot -ChildPath 'Log'),
-        [int]$MaxLogCount = 100 # You can adjust this as needed
+    [string]$LogDirectory = (Join-Path -Path $scriptRoot -ChildPath $config.LogDirectory),
+    [int]$MaxLogCount = $config.MaxLogCount # You can adjust this as needed
     )
+
     
     $oldLogs = Get-ChildItem -Path $LogDirectory -Filter 'Log_*.txt' | Sort-Object -Property LastWriteTime
     
@@ -186,7 +243,7 @@ function New-SettingsFile {
     )
 
     try {
-        $settingsFiles = Get-ChildItem -Path $scriptRoot -Filter 'Settings*.xml' | Select-Object -ExpandProperty BaseName
+        $settingsFiles = Get-ChildItem -Path $scriptRoot -Filter $config.SettingsFileFilter | Select-Object -ExpandProperty BaseName
         $maxNumber = ($settingsFiles | ForEach-Object { ($_ -replace '[^\d]', '') -as [int] } | Sort-Object -Descending | Select-Object -First 1) + 1
         $newSettingsFileName = "Settings$maxNumber.xml"
         $newSettingsFilePath = Join-Path -Path $scriptRoot -ChildPath $newSettingsFileName
@@ -270,7 +327,7 @@ function Confirm-Action {
 function Backup-Registry {
     [CmdletBinding()]
     param (
-        [string]$BackupDirectory = (Join-Path -Path $scriptRoot -ChildPath 'Backup')
+        [string]$BackupDirectory = (Join-Path -Path $scriptRoot -ChildPath $config.BackupDirectory)
     )
     
     try {
@@ -300,9 +357,9 @@ function Backup-Registry {
 
 
 
-
-
 # Main script
+
+$config = Get-Configuration
 
 Add-Type -AssemblyName System.Windows.Forms
 
@@ -311,6 +368,7 @@ $savedParameters = Get-SettingsFileDialog
 
 # Call the New-LogFile function at the start of the script
 New-LogFile
+Write-AuditLog -Parameters $savedParameters -ScriptUser $scriptUser
 Clear-OldLogs
 
 Get-Environment

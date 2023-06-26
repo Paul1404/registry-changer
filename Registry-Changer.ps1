@@ -212,28 +212,41 @@ function Update-UserProfiles {
 
     Get-ChildItem "Registry::HKEY_USERS" | Where-Object { $_.PSChildName -match "S-1-5-21" } | ForEach-Object {
         $user = $_
-        try {
-            $userRegPath = "Registry::HKEY_USERS\$($user.PSChildName)\$($parameters.RegPath)"
+        $attempt = 0
+        $maxAttempts = 3
+        while ($true) {
+            try {
+                $userRegPath = "Registry::HKEY_USERS\$($user.PSChildName)\$($parameters.RegPath)"
 
-            Write-CustomOutput "Processing user $($user.PSChildName)..." # Log start of user processing
+                Write-CustomOutput "Processing user $($user.PSChildName)..." # Log start of user processing
 
-            if (Test-Path -Path $userRegPath) {
-                if (Get-ItemProperty -Path $userRegPath -Name $parameters.ValueName -ErrorAction SilentlyContinue) {
-                    Write-CustomOutput "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
-                    return
+                if (Test-Path -Path $userRegPath) {
+                    if (Get-ItemProperty -Path $userRegPath -Name $parameters.ValueName -ErrorAction SilentlyContinue) {
+                        Write-CustomOutput "The registry value '$($parameters.ValueName)' is already set for user $($user.PSChildName). Skipping..."
+                        return
+                    }
+
+                    Write-CustomOutput "Setting the registry value for user $($user.PSChildName)..."
+                    Set-ItemProperty -Path $userRegPath -Name $parameters.ValueName -Value $parameters.ValueData -Type DWord
+                    Write-CustomOutput "Successfully set the registry value for user $($user.PSChildName)." # Log success of operation
+                } else {
+                    Write-CustomOutput "The registry path does not exist for user $($user.PSChildName). Skipping..."
                 }
-
-                Write-CustomOutput "Setting the registry value for user $($user.PSChildName)..."
-                Set-ItemProperty -Path $userRegPath -Name $parameters.ValueName -Value $parameters.ValueData -Type DWord
-                Write-CustomOutput "Successfully set the registry value for user $($user.PSChildName)." # Log success of operation
-            } else {
-                Write-CustomOutput "The registry path does not exist for user $($user.PSChildName). Skipping..."
+                break
+            } catch {
+                $attempt++
+                if ($attempt -eq $maxAttempts) {
+                    Write-CustomError "Error encountered while processing user $($user.PSChildName) after $maxAttempts attempts: $_"
+                    break
+                } else {
+                    Write-CustomOutput "Error occurred, attempt $attempt of $maxAttempts failed. Retrying..."
+                    Start-Sleep -Seconds (2 * $attempt)
+                }
             }
-        } catch {
-            Write-CustomError "Error encountered while processing user $($user.PSChildName): $_"
         }
     }
 }
+
 
 
 # Function to confirm user action
@@ -269,6 +282,14 @@ function Backup-Registry {
     
         Write-Host "Starting backup..."
         Start-Process -FilePath "regedit.exe" -ArgumentList "/E", "`"$backupFilePath`"" -NoNewWindow -Wait
+
+        # Check if the backup file exists and is not empty
+        if (!(Test-Path $backupFilePath -Type Leaf)) {
+            throw "Backup file not found"
+        } elseif ((Get-Item $backupFilePath).Length -le 0) {
+            throw "Backup file is empty"
+        }
+
         Write-Host "Backup complete."
         
         return $backupFilePath
@@ -276,6 +297,7 @@ function Backup-Registry {
         Write-Host "Error occurred while backing up the registry: $_"
     }
 }
+
 
 
 

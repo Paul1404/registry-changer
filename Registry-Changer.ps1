@@ -280,23 +280,38 @@ function Backup-Registry {
     param (
         [string]$BackupDirectory = (Join-Path -Path $scriptRoot -ChildPath 'Backup')
     )
-    
+
     try {
         if (!(Test-Path $BackupDirectory)) {
             New-Item -ItemType Directory -Path $BackupDirectory | Out-Null
         }
         $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
         $backupFilePath = Join-Path -Path $BackupDirectory -ChildPath "RegistryBackup_$timestamp.reg"
-    
-        Write-CustomOutput "Starting backup..."
-        Start-Process -FilePath "regedit.exe" -ArgumentList "/E", "`"$backupFilePath`"" -NoNewWindow -Wait
-        Write-CustomOutput "Backup complete."
-        
+
+        Write-Host "Starting backup..."
+
+        $loadingChars = '|/-\'
+        $index = 0
+
+        # Start the registry backup process
+        $process = Start-Process -FilePath "regedit.exe" -ArgumentList "/E", "`"$backupFilePath`"" -NoNewWindow -PassThru
+
+        # Display a loading message while the process is running
+        while (!$process.HasExited) {
+            Write-Host "`rBacking up registry... $($loadingChars[$index % $loadingChars.Length])" -NoNewline
+            Start-Sleep -Milliseconds 200
+            $index++
+        }
+
+        Write-Host "`rBackup complete."
+
         return $backupFilePath
     } catch {
-        Write-CustomError "Error occurred while backing up the registry: $_"
+        Write-Host "`rError occurred while backing up the registry: $_"
     }
 }
+
+
 
 # Main script
 

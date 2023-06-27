@@ -365,8 +365,9 @@ try {
         Write-CustomOutput "Parameters saved to file: $settingsFilePath"
     }
 
-    Write-CustomOutput 'Selected parameters:'
-    $savedParameters | Format-Table -AutoSize
+    Write-Host "`nSelected parameters:" -ForegroundColor Yellow
+    $formatTable = @{Expression={$_.RegPath};Label="RegPath";width=75},@{Expression={$_.ValueName};Label="ValueName";width=15},@{Expression={$_.ValueData};Label="ValueData";width=10}
+    $savedParameters | Format-Table $formatTable
 
     if (Confirm-Action -Message 'Do you want to proceed with these settings? (Y/N)') {
         if (Confirm-Action -Message 'Do you want to backup the registry? (Y/N)') {

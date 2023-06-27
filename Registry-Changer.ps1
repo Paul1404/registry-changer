@@ -280,8 +280,13 @@ function Update-UserProfiles {
                 Write-CustomOutput "Attempt $($retryCount) failed. Retrying..."
                 if ($retryCount -eq $maxRetries) {
                     Write-CustomError "Maximum retries reached for user $($user.PSChildName)."
+                    Write-CustomError "An error occurred during the execution of the script: $_"
+                    if ($backupFilePath) {
+                        Restore-Registry -BackupFilePath $backupFilePath
+                        Write-CustomOutput "Successfully restored the registry from backup."
                 }
                 Start-Sleep -Seconds (2*$retryCount)  # wait a bit before next retry, with backoff
+                }
             }
         }
     }
@@ -340,6 +345,39 @@ function Backup-Registry {
         return $backupFilePath
     } catch {
         Write-Host "`rError occurred while backing up the registry: $_"
+    }
+}
+
+
+function Restore-Registry {
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$BackupFilePath
+    )
+
+    if ($PSCmdlet.ShouldProcess("Are you sure you want to restore the registry from the backup file at '$BackupFilePath'?", "Restoring registry", "Restoring registry")) {
+        try {
+            Write-Host "Starting registry restore from backup..."
+
+            $loadingChars = '|/-\'
+            $index = 0
+
+            # Start the registry restore process
+            $process = Start-Process -FilePath "regedit.exe" -ArgumentList "/S", "`"$BackupFilePath`"" -NoNewWindow -PassThru
+
+            # Display a loading message while the process is running
+            while (!$process.HasExited) {
+                Write-Host "`rRestoring registry from backup... $($loadingChars[$index % $loadingChars.Length])" -NoNewline
+                Start-Sleep -Milliseconds 200
+                $index++
+            }
+
+            Write-Host "`rRestore complete."
+
+        } catch {
+            Write-Host "Error occurred while restoring the registry from backup: $_"
+        }
     }
 }
 

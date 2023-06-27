@@ -33,54 +33,129 @@ $logFilePath = ""
 $MaxLogCount = 100 # Default maximum number of log files
 
 
+<#
+.SYNOPSIS
+    Checks the PowerShell and Windows versions.
+
+.DESCRIPTION
+    The Get-Environment function checks the version of PowerShell and Windows. It ensures that PowerShell is at least version 5.1 and Windows is at least version 10.0. If these conditions are not met, the function will output an error message and exit. Otherwise, it will print a success message.
+
+.NOTES
+    This function depends on two other functions: Write-CustomError and Write-CustomOutput. These functions are used to output messages to the console.
+
+.EXAMPLE
+    Get-Environment
+
+    This will output either a success or error message for each check. If an error is encountered, the script will exit.
+
+#>
 function Get-Environment {
     # Check PowerShell version
+    # $PSVersionTable.PSVersion contains the version of PowerShell
     if ($PSVersionTable.PSVersion.Major -lt 5 -or ($PSVersionTable.PSVersion.Major -eq 5 -and $PSVersionTable.PSVersion.Minor -lt 1)) {
+        # If PowerShell version is less than 5.1, print an error and exit
         Write-CustomError "This script requires PowerShell version 5.1 or higher. Your version is $($PSVersionTable.PSVersion)."
         exit 1
     } else {
+        # If PowerShell version is 5.1 or greater, print a success message
         Write-CustomOutput "PowerShell version check passed. Your version is $($PSVersionTable.PSVersion)."
     }
 
     # Check Windows version
+    # Get-CimInstance is used to retrieve information about the Windows OS
     $osInfo = Get-CimInstance -ClassName Win32_OperatingSystem
     $version = [Version]$osInfo.Version
 
     if ($version.Major -lt 10) {
+        # If Windows version is less than 10.0, print an error and exit
         Write-CustomError "This script requires Windows version 10.0 or higher. Your version is $($osInfo.Caption) $($osInfo.Version)."
         exit 1
     } else {
+        # If Windows version is 10.0 or greater, print a success message
         Write-CustomOutput "Windows version check passed. Your version is $($osInfo.Caption) $($osInfo.Version)."
     }
 }
 
 
-# Function to create a new log file for each run
+
+<#
+.SYNOPSIS
+    Creates a new log file for each script run.
+
+.DESCRIPTION
+    The New-LogFile function creates a new log file every time the script is run. Log files are stored in a directory named 'Log' in the same location as the script. 
+    If the 'Log' directory does not exist, it is created.
+    The log file is named 'Log_YYYYMMDD_HHmmss.txt', where YYYYMMDD_HHmmss is the timestamp at the time of the script run.
+    After creating the log file, the function writes an audit trail entry including the timestamp, username, and machine name.
+
+.NOTES
+    This function depends on two other functions: Write-CustomError and Write-CustomOutput. These functions are used to output messages to the console and the log file.
+    The $scriptRoot global variable should be defined before calling this function. It should contain the path of the script's directory.
+    The $script:logFilePath script variable is set by this function. It contains the full path of the created log file.
+
+.EXAMPLE
+    New-LogFile
+
+    This will create a new log file in the 'Log' directory under $scriptRoot with the current timestamp, and then write an audit trail entry to it.
+
+#>
 function New-LogFile {
     try {
+        # Join the script root directory with 'Log' to get the log directory path
         $logDir = Join-Path -Path $scriptRoot -ChildPath 'Log'
         
+        # If the log directory does not exist, create it
         if (!(Test-Path $logDir)) {
             New-Item -ItemType Directory -Path $logDir | Out-Null
         }
 
+        # Get the current timestamp and format it as 'yyyyMMdd_HHmmss'
         $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+        # Join the log directory path with the log file name to get the full log file path
         $script:logFilePath = Join-Path -Path $logDir -ChildPath "Log_$timestamp.txt"
 
-        # Add audit trail information
+        # Get the machine name and username
         $machineName = $env:COMPUTERNAME
         $userName = $env:USERNAME
+        # Create the audit trail message and write it to the log file
         $auditMessage = "Log file created on $timestamp by $userName on machine $machineName"
         Write-CustomOutput $auditMessage
 
     } catch {
+        # If an error occurs, write the error message to the log file
         Write-CustomError "Error occurred while creating new log file: $_"
     }
 }
 
 
 
-# Custom functions to write output and errors
+<#
+.SYNOPSIS
+    Writes a custom log message with a timestamp and log level to the console and the log file.
+
+.DESCRIPTION
+    The Write-CustomOutput function is used to write custom log messages. Each message is outputted to the console and appended to the log file. 
+    The function adds a timestamp and a log level to each message.
+    The message color in the console can be customized.
+
+.PARAMETER Message
+    The message to be written to the console and the log file. 
+
+.PARAMETER Color
+    The color of the message in the console. The default value is 'White'. This parameter accepts any color name that is valid in the Write-Host cmdlet.
+
+.PARAMETER Level
+    The log level of the message. The default value is 'INFO'. This parameter can be used to indicate the importance or the type of the message (like 'ERROR', 'WARNING', 'DEBUG', etc.).
+
+.NOTES
+    The $script:logFilePath script variable should be defined before calling this function. It should contain the full path of the log file.
+    
+.EXAMPLE
+    Write-CustomOutput -Message "Script started." -Color "Green" -Level "INFO"
+
+    This will output the message "Script started." in green color to the console, and append the log message "YYYYMMDD_HHmmss - INFO - Script started." to the log file.
+
+#>
 function Write-CustomOutput {
     [CmdletBinding()]
     param (
@@ -90,14 +165,45 @@ function Write-CustomOutput {
         [string]$Level = "INFO" # Add log level parameter
     )
     
+    # Get the current timestamp and format it as 'yyyyMMdd_HHmmss'
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    # Create the log message including the timestamp, the log level and the message
     $logMessage = "$timestamp - $Level - $Message" # Include log level in log message
     
+    # Write the message to the console with the specified color
     Write-Host $Message -ForegroundColor $Color
     Write-Host ""
+    # Append the log message to the log file
     Add-Content -Path $script:logFilePath -Value $logMessage
 }
 
+
+<#
+.SYNOPSIS
+    Writes a custom error message with a timestamp, log level, and line number to the console and the log file.
+
+.DESCRIPTION
+    The Write-CustomError function is used to write custom error messages. Each message is outputted to the console in red (by default) and appended to the log file.
+    The function adds a timestamp, a log level, and the script line number where the error occurred to each error message.
+
+.PARAMETER Message
+    The error message to be written to the console and the log file.
+
+.PARAMETER Color
+    The color of the error message in the console. The default value is 'Red'. This parameter accepts any color name that is valid in the Write-Host cmdlet.
+
+.PARAMETER Level
+    The log level of the error message. The default value is 'ERROR'. This parameter can be used to indicate the importance or the type of the message (like 'CRITICAL', 'FATAL', etc.).
+
+.NOTES
+    The $script:logFilePath script variable should be defined before calling this function. It should contain the full path of the log file.
+    
+.EXAMPLE
+    Write-CustomError -Message "File not found." -Color "Red" -Level "ERROR"
+
+    This will output the error message "File not found." in red color to the console, and append the error message "YYYYMMDD_HHmmss - ERROR - File not found.\nError occurred on line: X" to the log file, where X is the script line number where the error occurred.
+
+#>
 function Write-CustomError {
     [CmdletBinding()]
     param (
@@ -107,19 +213,46 @@ function Write-CustomError {
         [string]$Level = "ERROR" # Add log level parameter
     )
     
+    # Get the current timestamp and format it as 'yyyyMMdd_HHmmss'
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    # Create the error message including the timestamp, the log level and the error message
     $errorMessage = "$timestamp - $Level - $Message" # Include log level in log message
 
-    # Add script line where the error occurred
+    # Add the script line where the error occurred
     $line = $_.InvocationInfo.ScriptLineNumber
     $errorMessage += "`nError occurred on line: $line"
 
+    # Write the error message to the console with the specified color
     Write-Host $Message -ForegroundColor $Color
+    # Append the error message to the log file
     Add-Content -Path $script:logFilePath -Value $errorMessage
 }
 
 
-# Function to manage old log files
+
+<#
+.SYNOPSIS
+    Deletes old log files, leaving only a specified maximum number of log files in the directory.
+
+.DESCRIPTION
+    The Clear-OldLogs function removes old log files in the specified directory, leaving only the latest logs up to the maximum log count.
+    The function sorts the log files by their last write time, and the oldest files get removed first if the total log count exceeds the specified maximum log count.
+
+.PARAMETER LogDirectory
+    The directory where the log files are located. By default, this is the 'Log' subdirectory in the $scriptRoot directory.
+
+.PARAMETER MaxLogCount
+    The maximum number of log files to be kept in the directory. If the total log count exceeds this number, the oldest logs will be deleted. By default, this value is taken from the $script:MaxLogCount script variable.
+
+.NOTES
+    The $script:MaxLogCount and $scriptRoot script variables should be defined before calling this function.
+
+.EXAMPLE
+    Clear-OldLogs -LogDirectory "C:\Scripts\Log" -MaxLogCount 10
+
+    This will delete the oldest log files in the "C:\Scripts\Log" directory, leaving only the 10 latest log files.
+
+#>
 function Clear-OldLogs {
     [CmdletBinding()]
     param (
@@ -127,8 +260,10 @@ function Clear-OldLogs {
         [int]$MaxLogCount = $script:MaxLogCount # You can adjust this as needed
     )
     
+    # Get all log files in the directory and sort them by last write time
     $oldLogs = Get-ChildItem -Path $LogDirectory -Filter 'Log_*.txt' | Sort-Object -Property LastWriteTime
     
+    # If the total log count exceeds the maximum log count, delete the oldest logs
     if ($oldLogs.Count -gt $MaxLogCount) {
         $logsToDelete = $oldLogs.Count - $MaxLogCount
         $oldLogs | Select-Object -First $logsToDelete | ForEach-Object {
@@ -141,17 +276,43 @@ function Clear-OldLogs {
 
 
 
-# Function to select a settings file
+
+<#
+.SYNOPSIS
+    Opens a file dialog for selecting a settings file and imports its content based on the file type.
+
+.DESCRIPTION
+    The Get-SettingsFileDialog function presents a file dialog that allows the user to select a settings file. 
+    The settings file can be in XML, JSON, or CSV format. 
+    Once a file is selected, the function reads the file's content based on the file type and returns the imported data.
+
+.PARAMETER None
+    This function doesn't take any parameters.
+
+.NOTES
+    This function requires the .NET System.Windows.Forms namespace to be loaded into the PowerShell session. 
+    The function uses the OpenFileDialog class to open the file dialog.
+
+.EXAMPLE
+    $settings = Get-SettingsFileDialog
+
+    This will open a file dialog, and after the user selects a settings file, the function will import the content 
+    of the file and store it in the $settings variable.
+
+#>
 function Get-SettingsFileDialog {
     try {
+        # Create OpenFileDialog object
         $dialog = New-Object System.Windows.Forms.OpenFileDialog
         $dialog.InitialDirectory = $scriptRoot
         $dialog.Filter = "XML files (*.xml)|*.xml|JSON files (*.json)|*.json|CSV files (*.csv)|*.csv"
         $dialog.Title = "Select a settings file"
-    
+
+        # Show the OpenFileDialog and check if the user clicked 'OK'
         if ($dialog.ShowDialog() -eq 'OK') {
             $selectedFilePath = $dialog.FileName
 
+            # Import the file's content based on the file type
             switch ($dialog.FilterIndex) {
                 1 { # XML
                     Import-Clixml -Path $selectedFilePath
@@ -176,26 +337,52 @@ function Get-SettingsFileDialog {
 
 
 
-# Function to read new parameters from the user
+
+<#
+.SYNOPSIS
+    Prompts the user for registry key path, value name, and value data and validates the inputs.
+
+.DESCRIPTION
+    The Get-NewParameters function asks the user to enter a registry path, a value name, and value data. 
+    It then validates each of these inputs to ensure they're not empty and that the registry path starts with a valid hive. 
+    If validation passes, the function returns a custom object with properties for the registry path, value name, and value data.
+
+.PARAMETER None
+    This function doesn't take any parameters. It relies on user input collected via the Read-Host cmdlet.
+
+.NOTES
+    The function uses regular expressions to validate the registry path.
+
+.EXAMPLE
+    $newParameters = Get-NewParameters
+
+    This example prompts the user to enter the registry path, value name, and value data, 
+    and then stores the validated inputs in the $newParameters variable.
+
+#>
 function Get-NewParameters {
+    # Prompt for registry path and validate
     $regPath = Read-Host -Prompt 'Enter the registry path'
     if ($regPath -notmatch '^(HKLM:|HKCU:|HKCR:|HKU:|HKCC:|HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER|HKEY_CLASSES_ROOT|HKEY_USERS|HKEY_CURRENT_CONFIG)\\') {
         Write-CustomError "The registry path is not valid. It should start with a valid hive (like 'HKLM:' or 'HKEY_LOCAL_MACHINE')."
         exit 1
     }
 
+    # Prompt for value name and validate
     $valueName = Read-Host -Prompt 'Enter the value name'
     if ([string]::IsNullOrEmpty($valueName)) {
         Write-CustomError "The value name cannot be empty."
         exit 1
     }
 
+    # Prompt for value data and validate
     $valueData = Read-Host -Prompt 'Enter the value data'
     if ([string]::IsNullOrEmpty($valueData)) {
         Write-CustomError "The value data cannot be empty."
         exit 1
     }
 
+    # Return new parameters as a custom object
     [PSCustomObject]@{
         RegPath = $regPath
         ValueName = $valueName
@@ -204,22 +391,55 @@ function Get-NewParameters {
 }
 
 
-# Function to create a new settings file
+
+<#
+.SYNOPSIS
+    Creates a new settings file in XML, JSON, or CSV format with provided parameters.
+
+.DESCRIPTION
+    The New-SettingsFile function takes an object of parameters and a file type, then creates a new settings file in the given format. 
+    The name of the new file is determined by incrementing the highest number among existing settings files.
+
+.PARAMETER parameters
+    A mandatory parameter representing the settings to be stored in the file.
+
+.PARAMETER FileType
+    An optional parameter representing the format of the settings file. It must be one of the following values: "XML", "JSON", or "CSV". The default is "XML".
+
+.EXAMPLE
+    $newSettings = Get-NewParameters
+    New-SettingsFile -parameters $newSettings -FileType "JSON"
+
+    This example first gets new parameters interactively from the user using the Get-NewParameters function. 
+    Then, it creates a new settings file in JSON format with those parameters.
+
+.NOTES
+    The function automatically determines the name of the new file by finding the highest numbered existing settings file and incrementing by 1.
+    In case of an error, the function calls the Write-CustomError function to log the error message.
+#>
 function New-SettingsFile {
     [CmdletBinding()]
     param (
+        # Mandatory parameter representing the settings to be stored in the file.
         [Parameter(Mandatory=$true)]
         $parameters,
+
+        # Optional parameter representing the format of the settings file.
+        # It must be one of the following values: "XML", "JSON", or "CSV". The default is "XML".
         [ValidateSet("XML", "JSON", "CSV")]
         [string]$FileType = "XML"
     )
 
     try {
+        # Get the base names of existing settings files and find the highest number
         $settingsFiles = Get-ChildItem -Path $scriptRoot -Filter "Settings*.$FileType" | Select-Object -ExpandProperty BaseName
         $maxNumber = ($settingsFiles | ForEach-Object { ($_ -replace '[^\d]', '') -as [int] } | Sort-Object -Descending | Select-Object -First 1) + 1
+
+        # Create the name and path for the new settings file
         $newSettingsFileName = "Settings$maxNumber.$FileType"
         $newSettingsFilePath = Join-Path -Path $scriptRoot -ChildPath $newSettingsFileName
 
+        # Create the new settings file in the given format
         switch ($FileType) {
             "XML" {
                 $parameters | Export-Clixml -Path $newSettingsFilePath
@@ -232,15 +452,46 @@ function New-SettingsFile {
             }
         }
 
+        # Return the path of the new settings file
         return $newSettingsFilePath
     } catch {
+        # If an error occurs, log the error message
         Write-CustomError "Error occurred while creating new settings file: $_"
     }
 }
 
 
 
-# Function to update user profiles with retry logic
+
+<#
+.SYNOPSIS
+    Updates the user profiles with a given parameter set and includes a retry mechanism for failures.
+
+.DESCRIPTION
+    The Update-UserProfiles function updates user profiles by making changes to the registry. 
+    If an error is encountered, the function will retry the update up to a maximum number of times (default is 3).
+
+.PARAMETER parameters
+    A mandatory parameter that should be a custom object containing registry path (RegPath), value name (ValueName), and value data (ValueData).
+
+.PARAMETER maxRetries
+    An optional parameter that defines the maximum number of retries if an error occurs during the update process. 
+    The default value is 3.
+
+.EXAMPLE
+    $params = [PSCustomObject]@{
+        RegPath = 'HKLM:\Software\MySoftware'
+        ValueName = 'MyValue'
+        ValueData = 'MyData'
+    }
+    Update-UserProfiles -parameters $params -maxRetries 5
+
+    This example updates user profiles with the specified parameters and sets the maximum retries to 5.
+
+.NOTES
+    This function is designed to update user profiles in a robust manner, handling temporary errors by retrying the update operation.
+    It writes progress and error information to the log through the Write-CustomOutput and Write-CustomError functions.
+#>
 function Update-UserProfiles {
     [CmdletBinding()]
     param (
@@ -294,7 +545,42 @@ function Update-UserProfiles {
 
 
 
-# Function to confirm user action
+
+<#
+.SYNOPSIS
+    Prompts the user to confirm an action by displaying a message and expecting a 'Y' or 'N' response.
+
+.DESCRIPTION
+    The Confirm-Action function prompts the user to confirm an action by displaying a message and expecting a 'Y' or 'N' response.
+    It returns $true if the user responds with 'Y' (yes), and $false if the user responds with 'N' (no).
+
+.PARAMETER Message
+    The message to display when asking for user confirmation.
+
+.EXAMPLE
+    if (Confirm-Action -Message "Are you sure you want to delete the file? (Y/N)") {
+        # Perform deletion
+    } else {
+        # Abort action
+    }
+
+    This example prompts the user with the specified message and proceeds with the deletion if the user responds with 'Y'.
+
+.NOTES
+    - The user's response is case-insensitive.
+    - Only 'Y' and 'N' responses are accepted. Any other response will be considered as 'N'.
+    - It is recommended to use this function when requiring user confirmation to avoid unintended actions.
+
+.FUNCTIONALITY
+    Interactive Prompts
+
+.INPUTS
+    None. You cannot pipe input to Confirm-Action.
+
+.OUTPUTS
+    System.Boolean. The function outputs a Boolean value ($true or $false) based on the user's response.
+
+#>
 function Confirm-Action {
     [CmdletBinding()]
     param (
@@ -309,6 +595,7 @@ function Confirm-Action {
         $false
     }
 }
+
 
 
 # Function to backup registry

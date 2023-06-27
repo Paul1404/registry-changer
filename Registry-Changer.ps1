@@ -203,7 +203,7 @@ function New-SettingsFile {
     
         return $newSettingsFilePath
     } catch {
-        Write-Host "Error occurred while creating new settings file: $_"
+        Write-CustomError "Error occurred while creating new settings file: $_"
     }
 }
 
@@ -288,13 +288,13 @@ function Backup-Registry {
         $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
         $backupFilePath = Join-Path -Path $BackupDirectory -ChildPath "RegistryBackup_$timestamp.reg"
     
-        Write-Host "Starting backup..."
+        Write-CustomOutput "Starting backup..."
         Start-Process -FilePath "regedit.exe" -ArgumentList "/E", "`"$backupFilePath`"" -NoNewWindow -Wait
-        Write-Host "Backup complete."
+        Write-CustomOutput "Backup complete."
         
         return $backupFilePath
     } catch {
-        Write-Host "Error occurred while backing up the registry: $_"
+        Write-CustomError "Error occurred while backing up the registry: $_"
     }
 }
 

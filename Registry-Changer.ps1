@@ -141,24 +141,39 @@ function Clear-OldLogs {
 
 
 
-# Function to select a settings XML file
+# Function to select a settings file
 function Get-SettingsFileDialog {
     try {
         $dialog = New-Object System.Windows.Forms.OpenFileDialog
         $dialog.InitialDirectory = $scriptRoot
-        $dialog.Filter = "XML files (*.xml)|*.xml"
-        $dialog.Title = "Select a settings XML file"
+        $dialog.Filter = "XML files (*.xml)|*.xml|JSON files (*.json)|*.json|CSV files (*.csv)|*.csv"
+        $dialog.Title = "Select a settings file"
     
         if ($dialog.ShowDialog() -eq 'OK') {
             $selectedFilePath = $dialog.FileName
-            Import-Clixml -Path $selectedFilePath
+
+            switch ($dialog.FilterIndex) {
+                1 { # XML
+                    Import-Clixml -Path $selectedFilePath
+                }
+                2 { # JSON
+                    Get-Content $selectedFilePath | ConvertFrom-Json
+                }
+                3 { # CSV
+                    Import-Csv -Path $selectedFilePath
+                }
+                default {
+                    throw "Invalid file type selected"
+                }
+            }
         } else {
             $null
         }
     } catch {
-        Write-CustomError "Error occurred while selecting the settings XML file: $_"
+        Write-CustomError "Error occurred while selecting the settings file: $_"
     }
 }
+
 
 
 # Function to read new parameters from the user
@@ -194,22 +209,35 @@ function New-SettingsFile {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
-        $parameters
+        $parameters,
+        [ValidateSet("XML", "JSON", "CSV")]
+        [string]$FileType = "XML"
     )
 
     try {
-        $settingsFiles = Get-ChildItem -Path $scriptRoot -Filter 'Settings*.xml' | Select-Object -ExpandProperty BaseName
+        $settingsFiles = Get-ChildItem -Path $scriptRoot -Filter "Settings*.$FileType" | Select-Object -ExpandProperty BaseName
         $maxNumber = ($settingsFiles | ForEach-Object { ($_ -replace '[^\d]', '') -as [int] } | Sort-Object -Descending | Select-Object -First 1) + 1
-        $newSettingsFileName = "Settings$maxNumber.xml"
+        $newSettingsFileName = "Settings$maxNumber.$FileType"
         $newSettingsFilePath = Join-Path -Path $scriptRoot -ChildPath $newSettingsFileName
-    
-        $parameters | Export-Clixml -Path $newSettingsFilePath
-    
+
+        switch ($FileType) {
+            "XML" {
+                $parameters | Export-Clixml -Path $newSettingsFilePath
+            }
+            "JSON" {
+                $parameters | ConvertTo-Json | Out-File -FilePath $newSettingsFilePath
+            }
+            "CSV" {
+                $parameters | Export-Csv -Path $newSettingsFilePath -NoTypeInformation
+            }
+        }
+
         return $newSettingsFilePath
     } catch {
         Write-CustomError "Error occurred while creating new settings file: $_"
     }
 }
+
 
 
 # Function to update user profiles with retry logic

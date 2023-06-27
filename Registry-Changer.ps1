@@ -598,7 +598,27 @@ function Confirm-Action {
 
 
 
-# Function to backup registry
+<#
+.SYNOPSIS
+    Creates a backup of the registry.
+
+.DESCRIPTION
+    The Backup-Registry function creates a backup of the registry by invoking the 'regedit.exe' command-line tool with the appropriate arguments.
+
+.PARAMETER BackupDirectory
+    An optional parameter specifying the directory where the backup file will be stored.
+    If not provided, the backup file will be saved in a 'Backup' subdirectory of the script's root directory.
+
+.EXAMPLE
+    Backup-Registry -BackupDirectory "C:\Backups"
+
+    This example creates a backup of the registry and saves the backup file in the 'C:\Backups' directory.
+
+.NOTES
+    - This function utilizes the 'regedit.exe' command-line tool, which is a built-in Windows utility.
+    - The backup file will be named 'RegistryBackup_<timestamp>.reg', where <timestamp> represents the current date and time.
+    - The progress of the backup process is displayed with a loading message.
+#>
 function Backup-Registry {
     [CmdletBinding()]
     param (
@@ -636,6 +656,27 @@ function Backup-Registry {
 }
 
 
+<#
+.SYNOPSIS
+    Restores the registry from a backup file.
+
+.DESCRIPTION
+    The Restore-Registry function restores the registry by running the regedit.exe command with the specified backup file.
+
+.PARAMETER BackupFilePath
+    The mandatory parameter that specifies the path to the backup file.
+
+.NOTES
+    This function provides a convenient way to restore the registry from a backup file created using the Backup-Registry function.
+    It displays progress information during the restore process and provides support for ShouldProcess to confirm the restoration action.
+
+.EXAMPLE
+    $backupFile = "C:\Backup\RegistryBackup_20230101_123456.reg"
+    Restore-Registry -BackupFilePath $backupFile
+
+    This example restores the registry from the specified backup file.
+
+#>
 function Restore-Registry {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param (
@@ -670,7 +711,30 @@ function Restore-Registry {
 
 
 
-# Main script
+
+<#
+.SYNOPSIS
+    Main script to manipulate registry settings of all user profiles on the computer.
+
+.DESCRIPTION
+    The main script provides options to import settings from an XML file or enter them manually.
+    It also allows creating a backup before applying the changes to the registry settings of user profiles.
+    The script performs various operations such as checking PowerShell and Windows versions, creating log files,
+    managing old log files, getting settings from the user, creating new settings files, executing registry updates,
+    and handling errors.
+
+.PARAMETER N/A
+    This script doesn't accept any parameters. All inputs are interactive.
+
+.NOTES
+    General notes:
+    - Please run the script with administrative privileges to ensure it can access and modify the registry.
+    - Always confirm that you have a recent backup of your registry before running the script, in case any issues arise.
+    - This script was last updated on 2023-06-25.
+
+.LINK
+    https://github.com/Paul1404/registry-changer
+#>
 
 try {
     Add-Type -AssemblyName System.Windows.Forms
@@ -709,3 +773,4 @@ try {
 } finally {
     Read-Host "Press Enter to exit"
 }
+

@@ -298,40 +298,41 @@ function Backup-Registry {
     }
 }
 
-
-
-
 # Main script
 
-Add-Type -AssemblyName System.Windows.Forms
+try {
+    Add-Type -AssemblyName System.Windows.Forms
 
-$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$savedParameters = Get-SettingsFileDialog
+    $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $savedParameters = Get-SettingsFileDialog
 
-# Call the New-LogFile function at the start of the script
-New-LogFile
-Clear-OldLogs
+    # Call the New-LogFile function at the start of the script
+    New-LogFile
+    Clear-OldLogs
 
-Get-Environment
+    Get-Environment
 
-if ($null -eq $savedParameters) {
-    $savedParameters = Get-NewParameters
-    $settingsFilePath = New-SettingsFile -parameters $savedParameters
-    Write-CustomOutput "Parameters saved to file: $settingsFilePath"
-}
-
-Write-CustomOutput 'Current saved parameters:'
-$savedParameters | Format-Table -AutoSize
-
-if (Confirm-Action -Message 'Do you want to proceed with these settings? (Y/N)') {
-    if (Confirm-Action -Message 'Do you want to backup the registry? (Y/N)') {
-        $backupFilePath = Backup-Registry
-        Write-CustomOutput "Registry has been backed up. Backup file: $backupFilePath"
+    if ($null -eq $savedParameters) {
+        $savedParameters = Get-NewParameters
+        $settingsFilePath = New-SettingsFile -parameters $savedParameters
+        Write-CustomOutput "Parameters saved to file: $settingsFilePath"
     }
-    Update-UserProfiles -parameters $savedParameters
-    Write-CustomOutput "Script execution complete."
-} else {
-    Write-CustomOutput "Script execution cancelled by user."
-}
 
-Read-Host "Press Enter to exit"
+    Write-CustomOutput 'Current saved parameters:'
+    $savedParameters | Format-Table -AutoSize
+
+    if (Confirm-Action -Message 'Do you want to proceed with these settings? (Y/N)') {
+        if (Confirm-Action -Message 'Do you want to backup the registry? (Y/N)') {
+            $backupFilePath = Backup-Registry
+            Write-CustomOutput "Registry has been backed up. Backup file: $backupFilePath"
+        }
+        Update-UserProfiles -parameters $savedParameters
+        Write-CustomOutput "Script execution complete."
+    } else {
+        Write-CustomOutput "Script execution cancelled by user."
+    }
+} catch {
+    Write-CustomError "An error occurred during the execution of the script: $_"
+} finally {
+    Read-Host "Press Enter to exit"
+}

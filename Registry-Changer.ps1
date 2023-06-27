@@ -28,8 +28,10 @@ https://github.com/Paul1404/registry-changer
 #>
 
 
-# Global variable to hold the log file path
+# Global variables
 $logFilePath = ""
+$MaxLogCount = 100 # Default maximum number of log files
+
 
 function Get-Environment {
     # Check PowerShell version
@@ -116,12 +118,13 @@ function Write-CustomError {
     Add-Content -Path $script:logFilePath -Value $errorMessage
 }
 
-# A function to manage old log files
+
+# Function to manage old log files
 function Clear-OldLogs {
     [CmdletBinding()]
     param (
         [string]$LogDirectory = (Join-Path -Path $scriptRoot -ChildPath 'Log'),
-        [int]$MaxLogCount = 100 # You can adjust this as needed
+        [int]$MaxLogCount = $script:MaxLogCount # You can adjust this as needed
     )
     
     $oldLogs = Get-ChildItem -Path $LogDirectory -Filter 'Log_*.txt' | Sort-Object -Property LastWriteTime
@@ -134,6 +137,7 @@ function Clear-OldLogs {
         }
     }
 }
+
 
 
 

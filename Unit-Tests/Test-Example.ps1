@@ -41,10 +41,11 @@ Describe "Registry-Changer.ps1" {
             # Assert the expected result
 
             # Validate that the registry settings were updated correctly for user profiles
-
+            Write-Output $result
             # Clean up any test artifacts
         }
     }
 
     # Placeholder for Testing Functions
+    
 }

@@ -365,7 +365,7 @@ try {
         Write-CustomOutput "Parameters saved to file: $settingsFilePath"
     }
 
-    Write-CustomOutput 'Current saved parameters:'
+    Write-CustomOutput 'Selected parameters:'
     $savedParameters | Format-Table -AutoSize
 
     if (Confirm-Action -Message 'Do you want to proceed with these settings? (Y/N)') {

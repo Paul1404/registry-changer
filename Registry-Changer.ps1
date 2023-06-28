@@ -35,44 +35,252 @@ $MaxLogCount = 100 # Default maximum number of log files
 
 <#
 .SYNOPSIS
-    Checks the PowerShell and Windows versions.
+    This function checks if the currently installed PowerShell version meets or exceeds a specified minimum version.
 
 .DESCRIPTION
-    The Get-Environment function checks the version of PowerShell and Windows. It ensures that PowerShell is at least version 5.1 and Windows is at least version 10.0. If these conditions are not met, the function will output an error message and exit. Otherwise, it will print a success message.
+    The Get-PowerShellVersion function takes a minimum version as a parameter and checks if the current PowerShell version 
+    is equal to or greater than this minimum version. It uses the built-in variable $PSVersionTable.PSVersion to get the current 
+    PowerShell version.
 
-.NOTES
-    This function depends on two other functions: Write-CustomError and Write-CustomOutput. These functions are used to output messages to the console.
+    If the current PowerShell version is less than the minimum version, the function throws an error message and stops execution.
+    If the current PowerShell version is equal to or greater than the minimum version, the function outputs a success message.
+
+.PARAMETER MinVersion
+    This parameter takes a version number (in the format "Major.Minor") and sets it as the minimum acceptable PowerShell version.
+    The default value is "5.1". 
 
 .EXAMPLE
-    Get-Environment
+    Get-PowerShellVersion
+    Checks if the current PowerShell version is equal to or greater than the default minimum version "5.1".
 
-    This will output either a success or error message for each check. If an error is encountered, the script will exit.
+.EXAMPLE
+    Get-PowerShellVersion -MinVersion "7.0"
+    Checks if the current PowerShell version is equal to or greater than version "7.0".
 
+.INPUTS
+    None
+
+.OUTPUTS
+    String
+    Outputs a string with either a success message detailing the current PowerShell version if it's acceptable, 
+    or it throws an exception with an error message if the current version is lower than the specified minimum version.
+
+.NOTES
+    Be sure to run this function in a try-catch block to properly handle the error message thrown if the current PowerShell 
+    version does not meet the specified minimum version.
+
+.LINK
+    https://docs.microsoft.com/en-us/powershell/scripting/learn/deep-dives/everything-about-exceptions
 #>
-function Get-Environment {
-    # Check PowerShell version
-    # $PSVersionTable.PSVersion contains the version of PowerShell
-    if ($PSVersionTable.PSVersion.Major -lt 5 -or ($PSVersionTable.PSVersion.Major -eq 5 -and $PSVersionTable.PSVersion.Minor -lt 1)) {
-        # If PowerShell version is less than 5.1, print an error and exit
-        Write-CustomError "This script requires PowerShell version 5.1 or higher. Your version is $($PSVersionTable.PSVersion)."
-        exit 1
-    } else {
-        # If PowerShell version is 5.1 or greater, print a success message
-        Write-CustomOutput "PowerShell version check passed. Your version is $($PSVersionTable.PSVersion)."
-    }
+function Get-PowerShellVersion {
+    param (
+        [Version]$MinVersion = "5.1"
+    )
 
-    # Check Windows version
-    # Get-CimInstance is used to retrieve information about the Windows OS
+    if ($PSVersionTable.PSVersion -lt $MinVersion) {
+        throw "This script requires PowerShell version $MinVersion or higher. Your version is $($PSVersionTable.PSVersion)."
+    } else {
+        Write-CustomSuccess "PowerShell version check passed. Your version is $($PSVersionTable.PSVersion)."
+    }
+}
+
+
+<#
+.SYNOPSIS
+    This function checks if the current Windows version meets or exceeds a specified minimum version.
+
+.DESCRIPTION
+    The Get-WindowsVersion function uses the Get-CimInstance cmdlet to retrieve information about the operating system 
+    from the Win32_OperatingSystem class. It then compares the current Windows version with the specified minimum 
+    version (MinVersion parameter).
+
+    If the current Windows version is less than the specified minimum version, the function throws an exception with 
+    an error message. If the current Windows version is equal to or greater than the minimum version, it outputs a 
+    success message.
+
+.PARAMETER MinVersion
+    This parameter takes a version number (in the format "Major.Minor") and sets it as the minimum acceptable Windows version. 
+    The default value is "10.0".
+
+.EXAMPLE
+    Get-WindowsVersion
+    Checks if the current Windows version is equal to or greater than the default minimum version "10.0".
+
+.EXAMPLE
+    Get-WindowsVersion -MinVersion "11.0"
+    Checks if the current Windows version is equal to or greater than version "11.0".
+
+.INPUTS
+    None
+
+.OUTPUTS
+    String
+    Outputs a string with either a success message detailing the current Windows version if it's acceptable, 
+    or it throws an exception with an error message if the current version is lower than the specified minimum version.
+
+.NOTES
+    This function requires the presence of the CIM (Common Information Model) infrastructure on the computer where it's run. 
+    This infrastructure is typically present on Windows systems starting with Windows Server 2012 and Windows 8.
+
+.LINK
+    https://docs.microsoft.com/en-us/windows/win32/cimwin32prov/win32-operatingsystem
+#>
+function Get-WindowsVersion {
+    param (
+        [Version]$MinVersion = "10.0"
+    )
+
     $osInfo = Get-CimInstance -ClassName Win32_OperatingSystem
     $version = [Version]$osInfo.Version
 
-    if ($version.Major -lt 10) {
-        # If Windows version is less than 10.0, print an error and exit
-        Write-CustomError "This script requires Windows version 10.0 or higher. Your version is $($osInfo.Caption) $($osInfo.Version)."
-        exit 1
+    if ($version -lt $MinVersion) {
+        throw "This script requires Windows version $MinVersion or higher. Your version is $($osInfo.Caption) $($osInfo.Version)."
     } else {
-        # If Windows version is 10.0 or greater, print a success message
-        Write-CustomOutput "Windows version check passed. Your version is $($osInfo.Caption) $($osInfo.Version)."
+        Write-CustomSuccess "Windows version check passed. Your version is $($osInfo.Caption) $($osInfo.Version)."
+    }
+}
+
+
+
+<#
+.SYNOPSIS
+    This function checks if the current user has administrative privileges.
+
+.DESCRIPTION
+    The Get-AdminPrivileges function uses the .NET classes Security.Principal.WindowsPrincipal and 
+    Security.Principal.WindowsIdentity to determine if the current user has administrative privileges. 
+    If the current user does not have administrative privileges, the function throws an exception with 
+    an error message. If the user has administrative privileges, it outputs a success message.
+
+.PARAMETER None
+    This function does not take any parameters.
+
+.EXAMPLE
+    Get-AdminPrivileges
+    Checks if the current user has administrative privileges.
+
+.INPUTS
+    None
+
+.OUTPUTS
+    String
+    Outputs a string with either a success message indicating the user has administrative privileges, 
+    or it throws an exception with an error message if the user does not have administrative privileges.
+
+.NOTES
+    This function is essential for scripts that need to perform tasks requiring administrative privileges, 
+    such as modifying registry keys, starting or stopping services, or managing user accounts.
+
+.LINK
+    https://docs.microsoft.com/en-us/dotnet/api/system.security.principal.windowsprincipal
+    https://docs.microsoft.com/en-us/dotnet/api/system.security.principal.windowsidentity
+#>
+function Get-AdminPrivileges {
+    if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw "This script must be run as an Administrator. Please re-run the script as an Administrator."
+    } else {
+        Write-CustomSuccess "Admin privileges check passed."
+    }
+}
+
+
+<#
+.SYNOPSIS
+    This function checks if there is an active internet connection.
+
+.DESCRIPTION
+    The Get-NetworkConnectivity function uses the Test-Connection cmdlet to ping cloudflares one.one.one.one. If the function cannot 
+    ping 1.1.1.1 successfully, it throws an exception with an error message. If the ping is successful, 
+    indicating an active internet connection, it outputs a success message.
+
+.PARAMETER None
+    This function does not take any parameters.
+
+.EXAMPLE
+    Get-NetworkConnectivity
+    Checks if there is an active internet connection.
+
+.INPUTS
+    None
+
+.OUTPUTS
+    String
+    Outputs a string with either a success message indicating an active internet connection, or it throws an exception with 
+    an error message if there is no active internet connection.
+
+.NOTES
+    This function is useful for scripts that need to connect to remote servers or perform tasks requiring an internet connection.
+    The script assumes that 1.1.1.1 is always available, which might not be true in all cases (for example, if 
+    1.1.1.1 is blocked on your network).
+
+.LINK
+    https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.management/test-connection
+#>
+function Get-NetworkConnectivity {
+    if (!(Test-Connection -ComputerName one.one.one.one -Count 2 -Quiet)) {
+        throw "This script requires an active internet connection. Please check your connection and try again."
+    } else {
+        Write-CustomSuccess "Network connectivity and Name Resolution check passed."
+    }
+}
+
+
+<#
+.SYNOPSIS
+    This function checks if a specific drive has enough free disk space.
+
+.DESCRIPTION
+    The Get-DiskSpace function uses the Get-PSDrive cmdlet to obtain information about the specified drive. 
+    It then checks if the free space on the drive is greater than or equal to the minimum required free space 
+    (MinSpaceGB parameter).
+
+    If the drive does not exist, or if the free space on the drive is less than the minimum required free space, 
+    the function throws an exception with an error message. If the drive exists and has sufficient free space, 
+    it outputs a success message.
+
+.PARAMETER DriveLetter
+    This parameter specifies the drive to check. The default value is "C:".
+
+.PARAMETER MinSpaceGB
+    This parameter specifies the minimum required free space on the drive, in gigabytes. The default value is 5.
+
+.EXAMPLE
+    Get-DiskSpace
+    Checks if the C: drive has at least 5 GB of free space.
+
+.EXAMPLE
+    Get-DiskSpace -DriveLetter "D:" -MinSpaceGB 10
+    Checks if the D: drive has at least 10 GB of free space.
+
+.INPUTS
+    None
+
+.OUTPUTS
+    String
+    Outputs a string with either a success message indicating the drive has enough free space, or it throws an exception 
+    with an error message if the drive does not exist or does not have enough free space.
+
+.NOTES
+    This function is useful for scripts that need to ensure sufficient disk space before performing tasks that might require 
+    a significant amount of space (like downloading files, creating backups, etc.).
+
+.LINK
+    https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.management/get-psdrive
+#>
+function Get-DiskSpace {
+    param (
+        [string]$DriveLetter = "C:",
+        [int]$MinSpaceGB = 5
+    )
+
+    $drive = Get-PSDrive -Name $DriveLetter.Replace(':', '')
+
+    if ($null -eq $drive) {
+        throw "Drive $DriveLetter does not exist."
+    } elseif ($drive.Free / 1GB -lt $MinSpaceGB) {
+        throw "Drive $DriveLetter does not have enough free space. Minimum required: ${MinSpaceGB}GB."
+    } else {
+        Write-CustomSuccess "Drive $DriveLetter has enough free space."
     }
 }
 
@@ -126,6 +334,63 @@ function New-LogFile {
         Write-CustomError "Error occurred while creating new log file: $_"
     }
 }
+
+
+<#
+.SYNOPSIS
+    This function is used to display successful operations.
+
+.DESCRIPTION
+    The Write-CustomSuccess function generates a success message, which is written to the console in green color 
+    indicating successful operations. The message, along with a timestamp and the success level, is also added 
+    to a log file.
+
+.PARAMETER Message
+    This parameter specifies the success message to be displayed and logged.
+
+.EXAMPLE
+    Write-CustomSuccess "The operation was successful."
+    Displays and logs the message "The operation was successful." as a success message.
+
+.INPUTS
+    String
+    Takes a string as an input which is the success message to be displayed and logged.
+
+.OUTPUTS
+    None
+    This function does not return a value. It writes the success message to the console and appends it to the log file.
+
+.NOTES
+    This function is useful for providing clear success indications during script execution.
+
+.LINK
+    https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/write-host
+    https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.management/add-content
+#>
+function Write-CustomSuccess {
+    [CmdletBinding()]
+    param (
+        [Parameter(ValueFromPipeline=$true)]
+        [string]$Message
+    )
+
+    # Define success color and level
+    $Color = "Green"
+    $Level = "SUCCESS"
+    
+    # Get the current timestamp and format it as 'yyyyMMdd_HHmmss'
+    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    # Create the log message including the timestamp, the log level and the message
+    $logMessage = "$timestamp - $Level - $Message" # Include log level in log message
+    
+    # Write the success message to the console with the green color
+    Write-Host $Message -ForegroundColor $Color
+    Write-Host ""
+    # Append the log message to the log file
+    Add-Content -Path $script:logFilePath -Value $logMessage
+}
+
+
 
 
 
@@ -634,26 +899,38 @@ function Backup-Registry {
 
         Write-Host "Starting backup..."
 
-        $loadingChars = '|/-\'
-        $index = 0
+        $startTime = Get-Date
 
         # Start the registry backup process
         $process = Start-Process -FilePath "regedit.exe" -ArgumentList "/E", "`"$backupFilePath`"" -NoNewWindow -PassThru
 
-        # Display a loading message while the process is running
+        $animationChars = '/-\|'
+        $animationIndex = 0
+
+        # Display a progress bar with animation and elapsed time while the process is running
         while (!$process.HasExited) {
-            Write-Host "`rBacking up registry... $($loadingChars[$index % $loadingChars.Length])" -NoNewline
+            $animationChar = $animationChars[$animationIndex % $animationChars.Length]
+            $elapsedTime = (Get-Date) - $startTime
+            $status = "In progress... $($animationChar)  |`nElapsed Time: $($elapsedTime.ToString('hh\:mm\:ss'))"
+            Write-Progress -Activity "Backing up registry" -Status $status -Id 1
             Start-Sleep -Milliseconds 200
-            $index++
+            $animationIndex++
         }
 
-        Write-Host "`rBackup complete."
+        $elapsedTime = (Get-Date) - $startTime
+        $status = "Complete `nElapsed Time: $($elapsedTime.ToString('hh\:mm\:ss'))"
+        Write-Progress -Activity "Backing up registry" -Status $status -Completed
+
+        Write-Host "Backup complete."
 
         return $backupFilePath
     } catch {
-        Write-Host "`rError occurred while backing up the registry: $_"
+        Write-Host "Error occurred while backing up the registry: $_"
     }
 }
+
+
+
 
 
 <#
@@ -746,7 +1023,11 @@ try {
     New-LogFile
     Clear-OldLogs
 
-    Get-Environment
+    Get-PowerShellVersion
+    Get-WindowsVersion
+    Get-AdminPrivileges
+    Get-NetworkConnectivity
+    Get-DiskSpace -DriveLetter "C:" -MinSpaceGB 1
 
     if ($null -eq $savedParameters) {
         $savedParameters = Get-NewParameters
@@ -761,10 +1042,10 @@ try {
     if (Confirm-Action -Message 'Do you want to proceed with these settings? (Y/N)') {
         if (Confirm-Action -Message 'Do you want to backup the registry? (Y/N)') {
             $backupFilePath = Backup-Registry
-            Write-CustomOutput "Registry has been backed up. Backup file: $backupFilePath"
+            Write-CustomSuccess "`nRegistry has been backed up. Backup file: $backupFilePath"
         }
         Update-UserProfiles -parameters $savedParameters
-        Write-CustomOutput "Script execution complete."
+        Write-CustomSuccess "Script execution complete."
     } else {
         Write-CustomOutput "Script execution cancelled by user."
     }
@@ -773,4 +1054,3 @@ try {
 } finally {
     Read-Host "Press Enter to exit"
 }
-
